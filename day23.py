@@ -47,6 +47,13 @@ for line, i in zip(lines, range(len(lines))):
 
 dirs = [(1,0),(-1,0),(0,1),(0,-1)]
 
+def room_below(room):
+    node = nodes[room]
+    for (n, _) in node[1]:
+        if nodes[n][2][0] == node[2][0] + 1:
+            return n
+    return None
+
 # Add adjecent
 for node_index, node in nodes.items():
     for dir in dirs:
@@ -54,17 +61,26 @@ for node_index, node in nodes.items():
         o_pos = (node_pos[0] + dir[0], node_pos[1] + dir[1])
         if o_pos in pos_to_node:
             node[1].append((pos_to_node[o_pos],1))
+
+
 to_delete = []
 for node_index, node in nodes.items():
-    if node[0] and len(node[1]) == 2:
+    if not node[0]:
+        continue
+    if not all([nodes[x[0]][0] for x in node[1]]):
         deidication = j_to_pod[node[2][1]]
         room_dedication[node_index] = deidication
         adjesent = list(node[1])
         for (n, _) in adjesent:
             # This is the bottom room slot
             if nodes[n][0]:
-                room_dedication[n] = deidication
-                low_room[node_index] = n
+                r = n
+                pr = node_index
+                while r:
+                    room_dedication[r] = deidication
+                    low_room[pr] = r
+                    pr = r
+                    r = room_below(r)
                 continue
             
             adjs = nodes[n][1]
@@ -97,12 +113,19 @@ def find_all_rechable(node_index, occupied):
             rechable.append((ind2, cost2 + cost))
     return can_be_visited
 
+def all_below_taken(node_index, others):
+    if node_index not in low_room:
+        return True
+    
+    l = low_room[node_index]
+    return l in others and all_below_taken(l, others)
+
+
+
 def can_move_to(node_index, type, occupied, others):
     start_is_room = nodes[node_index][0]
     if start_is_room and room_dedication[node_index] == type:
-        if not node_index in low_room:
-            return []
-        elif low_room[node_index] == other_pos:
+        if all_below_taken(node_index, others):
             return []
     possible_moves = []
     rechable = find_all_rechable(node_index, occupied)
@@ -113,9 +136,10 @@ def can_move_to(node_index, type, occupied, others):
         if start_is_room:
             possible_moves.append((index, cost * pod_to_cost_mul[type]))
             continue
-        if index in low_room and not low_room[index] in occupied:
+        if room_dedication[index] != type:
             continue
-        possible_moves.append((index, cost * pod_to_cost_mul[type]))
+        if all_below_taken(index, others):
+            possible_moves.append((index, cost * pod_to_cost_mul[type]))
     return possible_moves
 
 
@@ -144,16 +168,14 @@ while True:
         continue
     seen[pos] = cost
     it_count += 1
-    if (it_count % 100) == 0:
-        print(it_count, len(positions), len(seen))
 
     occupied = set([x for p in pos for x in p])
     for type, ids in zip(range(len(pos)), pos):
         pos_as_l = list(pos)
-        for node_index, i in zip(ids, range(len(ids))):
+        for node_index in ids:
             others = list(ids)
             others.remove(node_index)
-            moves = can_move_to(node_index, type, occupied, others)
+            moves = can_move_to(node_index, type, occupied, set(others))
             for end, cost_for_move in moves:
                 others.append(end)
                 others.sort()
